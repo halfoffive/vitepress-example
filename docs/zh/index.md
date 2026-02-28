@@ -3,23 +3,22 @@
 layout: home
 
 hero:
-  name: "Vitepress example"
-  text: "A VitePress Site"
-  tagline: My great project tagline
+  name: "Vitepress 示例"
+  text: "一个 VitePress 站点"
+  tagline: 我的伟大项目的标语
   actions:
     - theme: brand
-      text: Markdown Examples
-      link: /markdown-examples
+      text: Markdown 示例
+      link: /zh/markdown-examples
     - theme: alt
-      text: API Examples
-      link: /api-examples
+      text: API 示例
+      link: /zh/api-examples
 
 features:
-  - title: Feature A
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature B
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
-  - title: Feature C
-    details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
+  - title: 特性 A
+    details: 这是一个示例特性的详细描述，用于展示内容。
+  - title: 特性 B
+    details: 这是一个示例特性的详细描述，用于展示内容。
+  - title: 特性 C
+    details: 这是一个示例特性的详细描述，用于展示内容。
 ---
-
