@@ -41,12 +41,13 @@ export default defineConfig({
     },
 
     // 搜索
+    /*
     search: {
       provider: 'local',
       options: {
         locales: {
           // 本地化
-          /*
+
           zh: { // 如果你想翻译默认语言，请将此处设为 `root`
             translations: {
               button: {
@@ -69,10 +70,10 @@ export default defineConfig({
                 }
               }
             }
-          }*/
+          }
         }
       }
-    },
+    },*/
   },
   // 国际化
   locales: {
