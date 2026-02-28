@@ -30,9 +30,13 @@ export default defineConfig({
     ],
 
     // 图标
-    /*socialLinks: [
-      // { icon: 'github', link: 'https://github.com/vuejs/vitepress' },
-    ]*/
+    socialLinks: [
+      // { icon: 'github', link: 'https://github.com/halfoffive/vitepress-example/' },
+    ],
+    // 编辑
+    editLink: {
+      pattern: 'https://github.com/halfoffive/vitepress-example/edit/main/docs/:path',
+    },
 
     // 页脚
     footer: {
@@ -41,6 +45,9 @@ export default defineConfig({
     },
 
     // 搜索
+    search: {
+      provider: 'local'
+    }
     /*
     search: {
       provider: 'local',

@@ -73,7 +73,7 @@ export default defineAdditionalConfig({
             options: {
                 locales: {
                     // 本地化
-                    root: { // 如果你想翻译默认语言，请将此处设为 `root`
+                    zh: { // 如果你想翻译默认语言，请将此处设为 `root`
                         translations: {
                             button: {
                                 buttonText: '搜索',
