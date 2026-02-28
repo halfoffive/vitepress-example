@@ -8,6 +8,9 @@ export default defineConfig({
   titleTemplate: 'Vitepress example',
   description: "A VitePress Site",
 
+  // 站点将部署到的 base URL
+  base: '/vitepress-example/',
+
   // 最后更新时间
   lastUpdated: true,
 
