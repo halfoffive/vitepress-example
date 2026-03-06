@@ -9,10 +9,20 @@ export default defineConfig({
     description: "A VitePress Site",
 
     // 站点将部署到的 base URL
+    // 改动时请同时修改 head:link
     base: '/vitepress-example/',
 
     // 最后更新时间
     lastUpdated: true,
+    // HTML Head
+    head: [
+        [
+            'link',
+            { // 图标
+                rel: 'icon', type: 'image/svg+xml', href: '/vitepress-example/logo.svg',
+            }
+        ]
+    ],
 
     themeConfig: {
 
@@ -34,16 +44,6 @@ export default defineConfig({
         ],
         // 图标
         logo: "/logo.svg",
-
-        // HTML Head
-        head: [
-            [
-                'link',
-                { // 图标
-                    rel: 'icon', type: 'image/svg+xml', href: `/logo.svg`,
-                }
-            ]
-        ],
 
         // 社交媒体图标
         /*
