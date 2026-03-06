@@ -6,6 +6,9 @@ hero:
   name: "Vitepress example"
   text: "A VitePress Site"
   tagline: My great project tagline
+  image:
+    src: /logo.svg
+    alt: VitePress
   actions:
     - theme: brand
       text: Markdown Examples
@@ -23,3 +26,11 @@ features:
     details: Lorem ipsum dolor sit amet, consectetur adipiscing elit
 ---
 
+## Getting Started
+
+You can get started using VitePress right away using `npx`!
+
+```sh
+npm init
+npx vitepress init
+```

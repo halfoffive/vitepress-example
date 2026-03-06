@@ -11,9 +11,10 @@ export default defineAdditionalConfig({
     description: "一个由 VitePress 驱动的网站",
 
     themeConfig: {
+
         // 上栏
         nav: [
-            { text: '主页', link: '/zh' },
+            { text: '主页', link: '/zh/' },
             { text: '例子', link: '/zh/markdown-examples' }
         ],
 

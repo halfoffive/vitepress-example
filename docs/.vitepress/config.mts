@@ -17,9 +17,10 @@ export default defineConfig({
   themeConfig: {
 
     // https://vitepress.dev/reference/default-theme-config
+    // 使用activeMatch: '/'设置目录
     nav: [
       { text: 'Home', link: '/' },
-      { text: 'Examples', link: '/markdown-examples' }
+      { text: 'Examples', link: '/markdown-examples',}
     ],
 
     sidebar: [
@@ -31,11 +32,25 @@ export default defineConfig({
         ]
       }
     ],
-
     // 图标
+    logo: "/logo.svg",
+
+    // HTML Head
+    head: [
+      [
+        'link',
+        { // 图标
+          rel: 'icon',type:'image/svg+xml', href: `/logo.svg`,
+        }
+      ]
+    ],
+
+    // 社交媒体图标
+    /*
     socialLinks: [
       // { icon: 'github', link: 'https://github.com/halfoffive/vitepress-example/' },
     ],
+    */
     // 编辑
     editLink: {
       pattern: 'https://github.com/halfoffive/vitepress-example/edit/main/docs/:path',
