@@ -18,17 +18,19 @@ const { theme, page, frontmatter } = useData()
 ## 结果
 
 ### 主题数据
+
 <pre>{{ theme }}</pre>
 
 ### 页面数据
+
 <pre>{{ page }}</pre>
 
 ### 页面 Frontmatter
+
 <pre>{{ frontmatter }}</pre>
 ```
 
-<script setup>
-import { useData } from 'vitepress';
+<script setup>import {useData} from 'vitepress';
 
 const { site, theme, page, frontmatter } = useData()
 </script>
@@ -36,12 +38,15 @@ const { site, theme, page, frontmatter } = useData()
 ## 结果
 
 ### 主题数据
+
 <pre>{{ theme }}</pre>
 
 ### 页面数据
+
 <pre>{{ page }}</pre>
 
 ### 页面 Frontmatter
+
 <pre>{{ frontmatter }}</pre>
 
 ## 更多

@@ -1,5 +1,5 @@
 // import { createRequire } from 'module'
-import { defineAdditionalConfig} from 'vitepress';
+import {defineAdditionalConfig} from 'vitepress';
 // const require = createRequire(import.meta.url)
 // const pkg = require('vitepress/package.json')
 
@@ -14,8 +14,8 @@ export default defineAdditionalConfig({
 
         // 上栏
         nav: [
-            { text: '主页', link: '/zh/' },
-            { text: '例子', link: '/zh/markdown-examples' }
+            {text: '主页', link: '/zh/'},
+            {text: '例子', link: '/zh/markdown-examples'}
         ],
 
         // 侧边栏
@@ -23,8 +23,8 @@ export default defineAdditionalConfig({
             {
                 text: '例子',
                 items: [
-                    { text: 'Markdown 例子', link: '/zh/markdown-examples' },
-                    { text: '运行时 API 例子', link: '/zh/api-examples' }
+                    {text: 'Markdown 例子', link: '/zh/markdown-examples'},
+                    {text: '运行时 API 例子', link: '/zh/api-examples'}
                 ]
             }
         ],
