@@ -1,7 +1,9 @@
 name: 'build-tauri'
 
 on:
+  # 手动触发构建
   workflow_dispatch:
+  # 推送到 release 分支时触发
   push:
     branches:
       - release
@@ -11,60 +13,130 @@ jobs:
     permissions:
       contents: write
     strategy:
+      # 即使某个平台构建失败，也继续构建其他平台
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest' # for Arm based macs (M1 and above).
+          # -------------------- macOS 构建配置 --------------------
+          - platform: 'macos-latest' # Arm 架构 Mac (M1 及以上)
             args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest' # for Intel based macs.
+          - platform: 'macos-latest' # Intel 架构 Mac
             args: '--target x86_64-apple-darwin'
+
+          # -------------------- Linux 桌面构建配置 --------------------
           - platform: 'ubuntu-22.04'
             args: ''
-          - platform: 'ubuntu-22.04-arm' # Only available in public repos.
+          - platform: 'ubuntu-22.04-arm' # 仅公共仓库可用
             args: ''
+
+          # -------------------- Windows 构建配置 --------------------
           - platform: 'windows-latest'
             args: ''
 
+          # -------------------- Android 构建配置 (新增) --------------------
+          # 使用 Ubuntu 环境进行构建
+          - platform: 'ubuntu-22.04'
+            # --apk: 生成 APK 而不是 AAB
+            # --universal: 生成包含所有架构的 Universal APK
+            args: '--apk --universal'
+
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - name: 检出代码
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 如果未启用 lastUpdated，则不需要
+          fetch-depth: 0 # 获取完整 git 历史，用于生成版本信息
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04' || matrix.platform == 'ubuntu-22.04-arm' # This must match the platform value defined above.
+      # -------------------- 环境准备：Ubuntu 桌面依赖 --------------------
+      # 仅当平台是 Ubuntu 且不是 Android 构建时才安装桌面依赖 (GTK/WebKit)
+      - name: 安装依赖
+        if: (matrix.platform == 'ubuntu-22.04' || matrix.platform == 'ubuntu-22.04-arm') && !contains(matrix.args, 'android')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: setup node
+      # -------------------- 环境准备：Android 特定配置 --------------------
+      # 设置 Java 环境 (Android 构建必需)
+      - name: 设置 Java JDK
+        if: contains(matrix.args, 'android')
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 设置 Android SDK
+      - name: 设置 Android SDK
+        if: contains(matrix.args, 'android')
+        uses: android-actions/setup-android@v3
+
+      # 安装 Android NDK
+      # Tauri 通常需要 NDK，这里安装 r25c 版本
+      - name: 安装 NDK
+        if: contains(matrix.args, 'android')
+        run: sdkmanager "ndk;25.2.9519653"
+
+      # 配置 Android 签名 (使用官方文档推荐的方式)
+      # 将证书解码并生成 keystore.properties 配置文件
+      - name: 配置 Android 签名
+        if: contains(matrix.args, 'android')
+        env:
+          ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # 确保 android 目录存在，防止首次构建时目录缺失
+          mkdir -p src-tauri/gen/android
+          cd src-tauri/gen/android
+          
+          # 写入 keystore.properties 配置
+          echo "keyAlias=${ANDROID_KEY_ALIAS}" > keystore.properties
+          echo "password=${ANDROID_KEY_PASSWORD}" >> keystore.properties
+          
+          # 解码 Base64 证书到临时目录
+          base64 -d <<< "${ANDROID_KEY_BASE64}" > $RUNNER_TEMP/keystore.jks
+          
+          # 将证书路径写入配置
+          echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
+
+      # -------------------- 通用环境准备 --------------------
+      - name: 设置 Node.js 环境
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: 'npm' # Set this to npm, yarn or pnpm.
+          cache: 'npm' # 如果使用 yarn，请改为 yarn
 
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable # Set this to dtolnay/rust-toolchain@nightly
+      - name: 安装 Rust stable 版本
+        uses: dtolnay/rust-toolchain@stable
         with:
-          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          # 设置编译目标：
+          # macOS: 需要 aarch64 和 x86_64
+          # Android: 为了构建 Universal APK，需要安装所有主流架构的 target
+          targets: ${{
+            (matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin') ||
+            (contains(matrix.args, 'android') && 'aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android') ||
+            ''
+        }}
 
-      - name: Rust cache
+      - name: Rust 缓存
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
 
-      - name: install frontend dependencies
-        # If you don't have `beforeBuildCommand` configured you may want to build your frontend here too.
-        run: yarn install # change this to npm or pnpm depending on which one you use.
+      - name: 安装前端依赖
+        run: yarn install # 如果使用 npm，请改为 npm install
 
+      # -------------------- 执行构建 --------------------
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Android 签名环境变量 (通过上面的 step 已写入文件，此处仅作保留或备用)
+          # 注意：如果使用 keystore.properties 方式，这里的env可能不是必须的，但保留不会产生副作用
+          TAURI_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          TAURI_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         with:
-          tagName: app-v__VERSION__ # the action automatically replaces \_\_VERSION\_\_ with the app version.
+          tagName: app-v__VERSION__ # 自动替换 __VERSION__ 为应用版本号
           releaseName: 'App v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
+          releaseDraft: true # 发布为草稿，所有平台构建完成后可在 GitHub Releases 的 Drafts 中查看
           prerelease: false
           args: ${{ matrix.args }}
