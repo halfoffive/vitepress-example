@@ -16,53 +16,87 @@ open class BuildTask : DefaultTask() {
 
     @TaskAction
     fun assemble() {
-        val executable = """D:\Program Files\nodejs\node""";
+        val npmExecutable = findNpmExecutable();
         try {
-            runTauriCli(executable)
+            runTauriCli(npmExecutable)
         } catch (e: Exception) {
-            if (Os.isFamily(Os.FAMILY_WINDOWS)) {
-                // Try different Windows-specific extensions
-                val fallbacks = listOf(
-                    "$executable.exe",
-                    "$executable.cmd",
-                    "$executable.bat",
-                )
-                
-                var lastException: Exception = e
-                for (fallback in fallbacks) {
-                    try {
-                        runTauriCli(fallback)
-                        return
-                    } catch (fallbackException: Exception) {
-                        lastException = fallbackException
-                    }
+            throw GradleException("Failed to execute Tauri CLI: ${e.message}", e)
+        }
+    }
+
+    private fun findNpmExecutable(): String {
+        // Try to find npm using PATH
+        val npmCmd = if (Os.isFamily(Os.FAMILY_WINDOWS)) "where.exe npm" else "which npm"
+        try {
+            val process = ProcessBuilder(npmCmd.split(" "))
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText().trim()
+            if (process.waitFor() == 0 && output.isNotEmpty()) {
+                // Filter for valid npm executables
+                val validPaths = output.lines().filter { path ->
+                    val file = File(path)
+                    file.exists() && (file.extension == "cmd" || file.extension == "exe" || file.extension == "ps1" || file.canExecute())
                 }
-                throw lastException
-            } else {
-                throw e;
+                if (validPaths.isNotEmpty()) {
+                    // Prefer npm.cmd on Windows
+                    val cmdPath = validPaths.find { it.endsWith(".cmd") }
+                    if (cmdPath != null) return cmdPath
+                    return validPaths.first()
+                }
+            }
+        } catch (e: Exception) {
+            // Fallback to common locations
+        }
+
+        // Fallback to common paths (npm is usually in the same directory as node)
+        val commonPaths = if (Os.isFamily(Os.FAMILY_WINDOWS)) {
+            listOf(
+                "D:\\Program Files\\nodejs\\npm.cmd",
+                "C:\\Program Files\\nodejs\\npm.cmd",
+                "C:\\Program Files (x86)\\nodejs\\npm.cmd",
+                "${System.getenv("LOCALAPPDATA")}\\Programs\\nodejs\\npm.cmd"
+            )
+        } else {
+            listOf("/usr/local/bin/npm", "/usr/bin/npm")
+        }
+
+        for (path in commonPaths) {
+            if (File(path).exists()) {
+                return path
             }
         }
+
+        throw GradleException("Could not find npm executable. Please ensure Node.js and npm are installed and available in PATH.")
     }
 
     fun runTauriCli(executable: String) {
         val rootDirRel = rootDirRel ?: throw GradleException("rootDirRel cannot be null")
         val target = target ?: throw GradleException("target cannot be null")
         val release = release ?: throw GradleException("release cannot be null")
-        val args = listOf("tauri", "android", "android-studio-script");
+        
+        // Use npm run to execute tauri command
+        val args = mutableListOf("run", "tauri", "--", "android", "android-studio-script")
+
+        if (project.logger.isEnabled(LogLevel.DEBUG)) {
+            args.add("-vv")
+        } else if (project.logger.isEnabled(LogLevel.INFO)) {
+            args.add("-v")
+        }
+        if (release) {
+            args.add("--release")
+        }
+        args.add("--target")
+        args.add(target)
+
+        val workingDir = File(project.projectDir, rootDirRel)
+        project.logger.lifecycle("Running: $executable ${args.joinToString(" ")}")
+        project.logger.lifecycle("Working directory: $workingDir")
 
         project.exec {
-            workingDir(File(project.projectDir, rootDirRel))
-            executable(executable)
-            args(args)
-            if (project.logger.isEnabled(LogLevel.DEBUG)) {
-                args("-vv")
-            } else if (project.logger.isEnabled(LogLevel.INFO)) {
-                args("-v")
-            }
-            if (release) {
-                args("--release")
-            }
-            args(listOf("--target", target))
+            this.workingDir = workingDir
+            this.executable = executable
+            this.args = args
         }.assertNormalExitValue()
     }
 }
