@@ -100,6 +100,15 @@ export default defineConfig({
           }
         },*/
     },
+    markdown: {
+        // 启用数学公式
+        math: true,
+        // 图片懒加载
+        image: {
+            // 默认禁用；设置为 true 可为所有图片启用懒加载。
+            lazyLoading: true
+        },
+    }
     // 国际化
     locales: {
         root: {
