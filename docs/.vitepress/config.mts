@@ -108,7 +108,7 @@ export default defineConfig({
             // 默认禁用；设置为 true 可为所有图片启用懒加载。
             lazyLoading: true
         },
-    }
+    },
     // 国际化
     locales: {
         root: {
