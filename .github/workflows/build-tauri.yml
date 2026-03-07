@@ -1,4 +1,4 @@
-name: 'build-tauri'
+name: 'build-app'
 
 on:
   # 手动触发构建
@@ -6,7 +6,7 @@ on:
   # 推送到 release 分支时触发
   push:
     branches:
-      - release
+      - main
 
 jobs:
   publish-tauri:
