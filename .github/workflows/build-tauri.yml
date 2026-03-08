@@ -115,7 +115,7 @@ jobs:
             (matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin') ||
             (contains(matrix.args, 'android') && 'aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android') ||
             ''
-        }}
+      }}
 
       - name: Rust 缓存
         uses: swatinem/rust-cache@v2
