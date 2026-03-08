@@ -1,7 +1,7 @@
 name: 'build-tauri'
 
 on:
-  # 手动触发（Actions 页面会出现 “Run workflow” 按钮）
+  # 手动触发
   workflow_dispatch:
   # 推送到 release 分支时触发
   push:
@@ -41,22 +41,20 @@ jobs:
           # -------------------- Android 构建配置 --------------------
           - platform: 'ubuntu-22.04'
             name: 'Android'
-            args: ''               # Android 不通过 args 传 --apk，而是用 mobile 参数
-            mobile: 'android'      # 告诉 tauri-action 走 `tauri android build`
-            android: true          # 自定义标记，方便后面判断是否安装 Android 依赖
+            args: ''
+            mobile: 'android'
+            android: true
 
     runs-on: ${{ matrix.platform }}
-    # 在 Actions 列表中显示清晰的名字，如 “publish-tauri (macOS (Apple Silicon))”
     name: ${{ matrix.name }}
 
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # 获取完整 git 历史，用于生成版本信息等
+          fetch-depth: 0
 
       # -------------------- Ubuntu 桌面依赖 --------------------
-      # 仅在 Ubuntu 平台 且 不是 Android 构建时安装 GTK/WebKit 依赖
       - name: 安装 Linux 桌面依赖
         if: startsWith(matrix.platform, 'ubuntu') && !matrix.android
         run: |
@@ -64,7 +62,6 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       # -------------------- Android 专用环境 --------------------
-      # 1. 设置 Java（Android 必需）
       - name: 设置 Java JDK
         if: matrix.android
         uses: actions/setup-java@v4
@@ -72,50 +69,35 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # 2. 设置 Android SDK（会自动设置 ANDROID_HOME 环境变量）
       - name: 设置 Android SDK
         if: matrix.android
         uses: android-actions/setup-android@v3
 
-      # 3. 安装 NDK 并设置 NDK_HOME
-      # 这里安装一个固定版本，方便在环境变量里引用
       - name: 安装 Android NDK 并设置 NDK_HOME
         if: matrix.android
         env:
-          NDK_VERSION: '25.2.9519653'  # 按你本地/官方文档实际版本修改
+          NDK_VERSION: '25.2.9519653'
         run: |
-          # 使用 sdkmanager 安装指定版本 NDK
           sdkmanager "ndk;${NDK_VERSION}"
-
-          # 设置 ANDROID_HOME / NDK_HOME 环境变量（供后续步骤使用）
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> $GITHUB_ENV
 
-      # 4. 使用 rustup 添加 Android 编译目标
       - name: 添加 Android Rust 编译目标
         if: matrix.android
-        run: |
-          rustup target add aarch64-linux-android \
-            armv7-linux-androideabi \
-            i686-linux-android \
-            x86_64-linux-android
+        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
 
       # -------------------- 通用环境 --------------------
       - name: 设置 Node.js 环境
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-          cache: 'npm'  # 如果你用 yarn，可以改为 yarn
+          cache: 'npm'
 
       - name: 安装 Rust stable 版本
         uses: dtolnay/rust-toolchain@stable
         with:
-          # macOS 需要两个编译目标；Android 需要多个 Android 目标
-          targets: ${{ 
-            (matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin') ||
-            (matrix.android && 'aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android') ||
-            ''
-          }}
+          # [关键修复] 必须将表达式写在单行，不可换行
+          targets: ${{ (matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin') || (matrix.android && 'aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android') || '' }}
 
       - name: Rust 缓存
         uses: swatinem/rust-cache@v2
@@ -123,10 +105,9 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: 安装前端依赖
-        run: yarn install  # 如果你用 npm，改成 npm install
+        run: yarn install
 
       # -------------------- Android 签名配置 --------------------
-      # 按照官方文档示例，生成 keystore.properties 并解码证书
       - name: 配置 Android 签名
         if: matrix.android
         env:
@@ -134,18 +115,11 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          # 确保 android 目录存在（首次可能没有 gen/android）
           mkdir -p src-tauri/gen/android
           cd src-tauri/gen/android
-
-          # 写入 keystore.properties
           echo "keyAlias=${ANDROID_KEY_ALIAS}" > keystore.properties
           echo "password=${ANDROID_KEY_PASSWORD}" >> keystore.properties
-
-          # 解码 Base64 证书到临时目录
           base64 -d <<< "${ANDROID_KEY_BASE64}" > $RUNNER_TEMP/keystore.jks
-
-          # 写入 storeFile 路径
           echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
 
       # -------------------- 执行构建 --------------------
@@ -153,11 +127,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: app-v__VERSION__       # 自动替换 __VERSION__ 为应用版本
+          tagName: app-v__VERSION__
           releaseName: 'App v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true              # 发布为草稿，方便所有平台完成后一起发布
+          releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
-          # 关键：启用 Android 构建，action 会执行 `tauri android build` 而不是 `tauri build`
+          # 启用 Android 构建
           mobile: ${{ matrix.mobile || '' }}
