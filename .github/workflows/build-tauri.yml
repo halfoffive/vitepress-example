@@ -1,7 +1,7 @@
-name: build tauri
+name: 'build-tauri'
 
 on:
-  # 允许手动触发构建（这就是“Run workflow”按钮的来源）
+  # 允许手动触发构建
   workflow_dispatch:
   # 推送到 release 分支时触发
   push:
@@ -13,7 +13,6 @@ jobs:
     permissions:
       contents: write
     strategy:
-      # 即使某个平台构建失败，也继续构建其他平台
       fail-fast: false
       matrix:
         include:
@@ -40,12 +39,11 @@ jobs:
 
           # -------------------- Android --------------------
           - platform: 'ubuntu-22.04'
-            name: 'Android (Universal APK)' # 在Actions界面显示的清晰名称
+            name: 'Android (Universal APK)'
             args: '--apk --universal'
-            android: true # 自定义标记，用于判断是否为Android构建
+            android: true # 标记为 Android 构建
 
     runs-on: ${{ matrix.platform }}
-    # 自定义构建任务的显示名称，格式如 "publish-tauri (macOS (Apple Silicon))"
     name: ${{ matrix.name || matrix.platform }}
 
     steps:
@@ -55,7 +53,6 @@ jobs:
           fetch-depth: 0
 
       # -------------------- 环境准备：Ubuntu 桌面依赖 --------------------
-      # 仅在 Ubuntu 平台且非 Android 构建时运行
       - name: 安装 Linux 桌面依赖
         if: startsWith(matrix.platform, 'ubuntu') && !matrix.android
         run: |
@@ -78,7 +75,7 @@ jobs:
         if: matrix.android
         run: sdkmanager "ndk;25.2.9519653"
 
-      # Android 签名配置 (严格按照官方文档逻辑)
+      # Android 签名配置
       - name: 配置 Android 签名
         if: matrix.android
         env:
@@ -86,18 +83,11 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          # 确保目录存在
           mkdir -p src-tauri/gen/android
           cd src-tauri/gen/android
-          
-          # 生成 keystore.properties 文件
           echo "keyAlias=${ANDROID_KEY_ALIAS}" > keystore.properties
           echo "password=${ANDROID_KEY_PASSWORD}" >> keystore.properties
-          
-          # 解码证书文件
           base64 -d <<< "${ANDROID_KEY_BASE64}" > $RUNNER_TEMP/keystore.jks
-          
-          # 写入证书路径
           echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
 
       # -------------------- 通用环境准备 --------------------
@@ -110,11 +100,8 @@ jobs:
       - name: 安装 Rust stable 版本
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{
-            (matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin') ||
-            (matrix.android && 'aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android') ||
-            ''
-        }}
+          # [修复] 将多行表达式改为单行，避免 YAML 语法错误
+          targets: ${{ (matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin') || (matrix.android && 'aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android') || '' }}
 
       - name: Rust 缓存
         uses: swatinem/rust-cache@v2
