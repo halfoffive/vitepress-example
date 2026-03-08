@@ -1,23 +1,23 @@
 name: 'build-tauri'
 
 on:
-  # 手动触发
+  # 手动触发（Actions 页面会出现 “Run workflow” 按钮）
   workflow_dispatch:
-  # 推送到 release 分支时触发
+  # 推送到 release 分支时自动触发
   push:
     branches:
       - release
 
 jobs:
-  publish-tauri:
+  # ==================== 桌面端构建（macOS / Windows / Linux） ====================
+  desktop:
     permissions:
       contents: write
-
     strategy:
       fail-fast: false
       matrix:
         include:
-          # -------------------- macOS 构建配置 --------------------
+          # -------------------- macOS --------------------
           - platform: 'macos-latest'
             name: 'macOS (Apple Silicon)'
             args: '--target aarch64-apple-darwin'
@@ -25,7 +25,7 @@ jobs:
             name: 'macOS (Intel)'
             args: '--target x86_64-apple-darwin'
 
-          # -------------------- Linux 桌面构建配置 --------------------
+          # -------------------- Linux --------------------
           - platform: 'ubuntu-22.04'
             name: 'Linux (x64)'
             args: ''
@@ -33,17 +33,10 @@ jobs:
             name: 'Linux (ARM)'
             args: ''
 
-          # -------------------- Windows 构建配置 --------------------
+          # -------------------- Windows --------------------
           - platform: 'windows-latest'
             name: 'Windows'
             args: ''
-
-          # -------------------- Android 构建配置 --------------------
-          - platform: 'ubuntu-22.04'
-            name: 'Android'
-            args: ''
-            mobile: 'android'
-            android: true
 
     runs-on: ${{ matrix.platform }}
     name: ${{ matrix.name }}
@@ -54,39 +47,94 @@ jobs:
         with:
           fetch-depth: 0
 
-      # -------------------- Ubuntu 桌面依赖 --------------------
+      # -------------------- 仅在 Ubuntu 安装桌面依赖 --------------------
       - name: 安装 Linux 桌面依赖
-        if: startsWith(matrix.platform, 'ubuntu') && !matrix.android
+        if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      # -------------------- Android 专用环境 --------------------
+      # -------------------- Node 环境 --------------------
+      - name: 设置 Node.js 环境
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: 'npm'
+
+      # -------------------- Rust 环境 --------------------
+      - name: 安装 Rust stable 版本
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          # macOS 需要两个编译目标
+          targets: ${{ 
+            (matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin') || 
+            '' 
+          }}
+
+      - name: Rust 缓存
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: 安装前端依赖
+        run: npm install
+
+      # -------------------- 桌面端构建 --------------------
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: app-v__VERSION__           # 自动替换 __VERSION__ 为应用版本
+          releaseName: 'App v__VERSION__'
+          releaseBody: 'See the assets to download this version and install.'
+          releaseDraft: true                  # 草稿 Release，所有平台完成后一起发布
+          prerelease: false
+          args: ${{ matrix.args }}
+
+  # ==================== Android 构建（单独 job） ====================
+  android:
+    permissions:
+      contents: write
+    runs-on: ubuntu-22.04
+    name: 'Android (APK)'
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # -------------------- Java / Android 环境 --------------------
       - name: 设置 Java JDK
-        if: matrix.android
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
       - name: 设置 Android SDK
-        if: matrix.android
         uses: android-actions/setup-android@v3
 
-      - name: 安装 Android NDK 并设置 NDK_HOME
-        if: matrix.android
+      - name: 安装 Android NDK 并设置 ANDROID_NDK_HOME
         env:
-          NDK_VERSION: '25.2.9519653'
+          NDK_VERSION: '25.2.9519653'  # 根据你本地 / 官方文档版本修改
         run: |
+          # 使用 sdkmanager 安装指定版本 NDK
           sdkmanager "ndk;${NDK_VERSION}"
-          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-          echo "NDK_HOME=$ANDROID_HOME/ndk/${NDK_VERSION}" >> $GITHUB_ENV
 
+          # 设置环境变量供后续步骤使用
+          # 注意：setup-android 通常已经设置了 ANDROID_HOME，我们在此基础上设置 NDK_HOME
+          echo "ANDROID_HOME=${ANDROID_HOME}" >> $GITHUB_ENV
+          echo "ANDROID_NDK_HOME=${ANDROID_HOME}/ndk/${NDK_VERSION}" >> $GITHUB_ENV
+
+      # -------------------- 添加 Android Rust target --------------------
       - name: 添加 Android Rust 编译目标
-        if: matrix.android
-        run: rustup target add aarch64-linux-android armv7-linux-androideabi i686-linux-android x86_64-linux-android
+        run: |
+          rustup target add aarch64-linux-android \
+            armv7-linux-androideabi \
+            i686-linux-android \
+            x86_64-linux-android
 
-      # -------------------- 通用环境 --------------------
+      # -------------------- Node / Rust 环境 --------------------
       - name: 设置 Node.js 环境
         uses: actions/setup-node@v4
         with:
@@ -95,9 +143,6 @@ jobs:
 
       - name: 安装 Rust stable 版本
         uses: dtolnay/rust-toolchain@stable
-        with:
-          # [关键修复] 必须将表达式写在单行，不可换行
-          targets: ${{ (matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin') || (matrix.android && 'aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android') || '' }}
 
       - name: Rust 缓存
         uses: swatinem/rust-cache@v2
@@ -105,33 +150,51 @@ jobs:
           workspaces: './src-tauri -> target'
 
       - name: 安装前端依赖
-        run: yarn install
+        run: npm install
 
       # -------------------- Android 签名配置 --------------------
+      # 参考：https://tauri.app/zh-cn/distribute/sign/android/
       - name: 配置 Android 签名
-        if: matrix.android
         env:
           ANDROID_KEY_BASE64: ${{ secrets.ANDROID_KEY_BASE64 }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
+          # 确保 android 目录存在
           mkdir -p src-tauri/gen/android
           cd src-tauri/gen/android
+
+          # 写入 keystore.properties（注意 key 名要和官方文档一致）
           echo "keyAlias=${ANDROID_KEY_ALIAS}" > keystore.properties
           echo "password=${ANDROID_KEY_PASSWORD}" >> keystore.properties
+
+          # 解码 Base64 证书到临时目录
           base64 -d <<< "${ANDROID_KEY_BASE64}" > $RUNNER_TEMP/keystore.jks
+
+          # 写入 storeFile 路径
           echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
 
-      # -------------------- 执行构建 --------------------
+      # -------------------- Android 构建（关键：自己调用 tauri android build） --------------------
+      - name: 构建 Android APK（按架构拆分）
+        run: |
+          # 注意：这里是 npm，不是 yarn
+          # --apk: 生成 APK
+          # --split-per-abi: 按架构拆分 APK（更推荐；如果你一定要 Universal APK，可以去掉这个参数）
+          npm run tauri android build -- --apk --split-per-abi
+
+      # -------------------- 上传 APK 到同一个 Release --------------------
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          # 必须和 desktop job 的 tagName 一致，否则会创建不同的 Release
           tagName: app-v__VERSION__
           releaseName: 'App v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
           releaseDraft: true
           prerelease: false
-          args: ${{ matrix.args }}
-          # 启用 Android 构建
-          mobile: ${{ matrix.mobile || '' }}
+          # 这里不再执行构建，只负责上传
+          tauriScript: 'true'  # 不执行任何构建命令，仅上传已有产物
+          # 如果你只想上传 APK，可以指定 assetPath / assetName，也可以让 action 自动识别
+          # assetPath: src-tauri/gen/android/app/build/outputs/apk/universal/release/*.apk
+          # assetName: app-android.apk
